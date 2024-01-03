@@ -1,81 +1,11 @@
-let map = L.map('map', {
-    maxBounds: [[49, 14], [55, 25]],
-    minZoom: 6,
-    maxZoom: 18
-    }
-).setView([51.9189, 19.1343786], 6);
-let markers = [];
-let polyline;
-
-let boundsOfPoland = {
-    north: 55.03,
-    south: 49.05,
-    west: 14.11,
-    east: 24.00
+let MAP_BOUNDS = {
+    NORTH: 55,
+    SOUTH: 49,
+    WEST: 14,
+    EAST: 25
 };
-let boundsOfPoland2 = [[49.05, 14.11], [55.03, 24.00]];
-let bounds = new L.LatLngBounds(boundsOfPoland2);
-console.log(bounds);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap contributors'
-}).addTo(map);
-
-let geocoder = new L.Control.geocoder({
-    defaultMarkGeocode: false
-}).on('markgeocode', function(e) {
-    let bbox = e.geocode.bbox;
-    let poly = L.polygon([
-        bbox.getSouthEast(),
-        bbox.getNorthEast(),
-        bbox.getNorthWest(),
-        bbox.getSouthWest()
-    ]).addTo(map);
-    map.fitBounds(poly.getBounds());
-}).addTo(map);
-
-function isWithinPoland(lat, lng) {
-    return lat >= boundsOfPoland.south && lat <= boundsOfPoland.north &&
-           lng >= boundsOfPoland.west && lng <= boundsOfPoland.east;
-}
-
-function createPOIInputs() {
-    let numberOfPOIs = document.getElementById('poi').value;
-    let poiInputsDiv = document.getElementById('poiInputs');
-    poiInputsDiv.innerHTML = '';
-
-    for (let i = 0; i < numberOfPOIs; i++) {
-        let input = document.createElement("input");
-        input.type = "number";
-        input.id = "minutes_" + i;
-        input.name = "minutes_" + i;
-        input.placeholder = "Minutes for POI " + (i + 1);
-
-        poiInputsDiv.appendChild(input);
-        poiInputsDiv.appendChild(document.createElement("br"));
-    }
-}
-
-function logValues() {
-    let minutes = document.getElementById('minutes').value;
-    let km = document.getElementById('km').value;
-    let numberOfPOIs = document.getElementById('poi').value;
-
-    console.log("Minutes:", minutes);
-    console.log("Kilometers:", km);
-    console.log("Number of POIs:", numberOfPOIs);
-
-    for (let i = 0; i < numberOfPOIs; i++) {
-        let poiMinutes = document.getElementById('minutes_' + i).value;
-        console.log("Minutes for POI " + (i + 1) + ":", poiMinutes);
-    }
-
-    if (markers.length >= 2) {
-        console.log("Start Point Lat, Lon:", markers[0].getLatLng());
-        console.log("End Point Lat, Lon:", markers[1].getLatLng());
-    }
-}
+let MINZOOM = 6;
+let MAXZOOM = 18;
 
 let greenIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
@@ -95,15 +25,108 @@ let redIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
+let map = L.map('map', {
+    maxBounds: [[MAP_BOUNDS.SOUTH, MAP_BOUNDS.WEST], [MAP_BOUNDS.NORTH, MAP_BOUNDS.EAST]],
+    minZoom: MINZOOM,
+    maxZoom: MAXZOOM
+}
+).setView([(MAP_BOUNDS.NORTH + MAP_BOUNDS.SOUTH) / 2, (MAP_BOUNDS.WEST + MAP_BOUNDS.EAST) / 2], MINZOOM);
+let markers = [];
+let polyline;
+let bounds = new L.LatLngBounds([[MAP_BOUNDS.SOUTH, MAP_BOUNDS.WEST], [MAP_BOUNDS.NORTH, MAP_BOUNDS.EAST]]);
+
+let amenities;
+async function fetch_amenities() {
+    try {
+        const response = await fetch('http://localhost:8000/amenities/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+        });
+        const data = await response.json();
+        amenities = data.amenities;
+    } catch (error) {
+        console.error('Error fetching amenities:', error);
+    }
+}
+async function initialize() {
+    await fetch_amenities();
+}
+initialize();
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: MAXZOOM + 1,
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+
+
+let geocoder = new L.Control.geocoder({
+    defaultMarkGeocode: false
+}).on('markgeocode', function (e) {
+    let bbox = e.geocode.bbox;
+    let poly = L.polygon([
+        bbox.getSouthEast(),
+        bbox.getNorthEast(),
+        bbox.getNorthWest(),
+        bbox.getSouthWest()
+    ]).addTo(map);
+    map.fitBounds(poly.getBounds());
+}).addTo(map);
+
+function isWithinMapBounds(lat, lng) {
+
+    return lat >= MAP_BOUNDS.SOUTH && lat <= MAP_BOUNDS.NORTH &&
+        lng >= MAP_BOUNDS.WEST && lng <= MAP_BOUNDS.EAST;
+}
+
+function createPOIInputs() {
+    let numberOfPOIs = document.getElementById('poi').value;
+    let poiInputsDiv = document.getElementById('poiInputs');
+    poiInputsDiv.innerHTML = '';
+
+    for (let i = 0; i < numberOfPOIs; i++) {
+        let input = document.createElement("input");
+        input.type = "number";
+        input.id = "poi_minutes_" + i;
+        input.name = "poi_minutes_" + i;
+        input.placeholder = "Minutes for POI " + (i + 1);
+        input.min = 0;
+
+        let select = document.createElement("select");
+        select.id = "poi_type_" + i;
+        select.name = "poi_type_" + i;
+        select.placeholder = "Type for POI " + (i + 1);
+        select.value = null;
+
+        let defaultOption = document.createElement("option");
+        defaultOption.value = null;
+        defaultOption.text = "Select an option";
+        select.appendChild(defaultOption);
+
+        for (let j = 0; j < amenities.length; j++) {
+            let option = document.createElement("option");
+            option.value = amenities[j];
+            option.text = amenities[j];
+            select.appendChild(option);
+        }
+
+        poiInputsDiv.appendChild(input);
+        poiInputsDiv.appendChild(select);
+        poiInputsDiv.appendChild(document.createElement("br"));
+    }
+}
+
 function addMarker(lat, lng, isFirst) {
     var icon = isFirst ? greenIcon : redIcon;
     var marker = L.marker([lat, lng], {
         draggable: true,
         icon: icon
-    }).addTo(map).bindTooltip(isFirst ? "Start" : "End", {permanent: true, offset: [0, 0]});
+    }).addTo(map).bindTooltip(isFirst ? "Start" : "End", { permanent: true, offset: [0, 0] });
 
     var initialPosition = [lat, lng];
-    marker.on('dragend', function(e) {
+    marker.on('dragend', function (e) {
         if (!bounds.contains(e.target.getLatLng())) {
             e.target.setLatLng(initialPosition);
         } else {
@@ -124,18 +147,17 @@ function updatePath() {
 
     if (markers.length === 2) {
         let latlngs = [markers[0].getLatLng(), markers[1].getLatLng()];
-        polyline = L.polyline(latlngs, {color: 'blue'}).addTo(map);
+        polyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
         map.fitBounds(polyline.getBounds());
     }
+};
+
+function get_amenities() {
+
 }
 
-map.on('click', function(e) {
-    if (!bounds.contains(e.latlng)) {
-        alert("Please place markers within Poland.");
-        return;
-    }
-    if (!isWithinPoland(e.latlng.lat, e.latlng.lng)) {
-        alert("Please place markers within Poland.");
+map.on('click', function (e) {
+    if (!bounds.contains(e.latlng) || !isWithinMapBounds(e.latlng.lat, e.latlng.lng)) {
         return;
     }
     if (markers.length === 0) {
@@ -144,3 +166,62 @@ map.on('click', function(e) {
         addMarker(e.latlng.lat, e.latlng.lng, false);
     }
 });
+
+function createPath() {
+    let additional_time = document.getElementById('minutes').value;
+    let additional_distance = document.getElementById('km').value;
+    let n_pois = document.getElementById('poi').value;
+    let pois = new Array();
+
+    if (markers.length != 2) {
+        console.log("Not enough markers");
+        return;
+    }
+
+    for (let i = 0; i < n_pois; i++) {
+        let poiType = document.getElementById('poi_type_' + i).value;
+        let poiMinutes = document.getElementById('poi_minutes_' + i).value;
+
+        if (poiType === "null") {
+            poiType = null;
+        }
+        if (poiMinutes === "") {
+            poiMinutes = null;
+        }
+
+        pois.push({
+            "type": poiType,
+            "visit_time": poiMinutes
+        });
+    }
+
+    let data = {
+        "start": {
+            "latitude": markers[0].getLatLng().lat,
+            "longitude": markers[0].getLatLng().lng
+        },
+        "end": {
+            "latitude": markers[1].getLatLng().lat,
+            "longitude": markers[1].getLatLng().lng
+        },
+        "additional_time": additional_time,
+        "additional_distance": additional_distance,
+        "pois": pois
+    };
+
+    fetch('http://localhost:8000/route/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Successfully created path: ");
+            console.log(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+};

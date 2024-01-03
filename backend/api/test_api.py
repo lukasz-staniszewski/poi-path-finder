@@ -21,6 +21,7 @@ class TestApi(TestCase):
         response_data = response.json()
         self.assertIn("amenities", response_data.keys())
         self.assertIsNotNone(response_data["amenities"])
+        self.assertTrue(len(response_data["amenities"]) > 0)
         for amenity in response_data["amenities"]:
             self.assertIsInstance(amenity, str)
             self.assertIsNotNone(amenity)
