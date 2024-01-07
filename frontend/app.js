@@ -220,8 +220,21 @@ function createPath() {
         .then(data => {
             console.log("Successfully created path: ");
             console.log(data);
+            drawPath(data.points);
+
         })
         .catch(error => {
             console.error('Error:', error);
         });
 };
+
+function drawPath(points) {
+
+    if (polyline) {
+        map.removeLayer(polyline);
+    }
+
+    let latlngs = points.map(point => [point.map_point.latitude, point.map_point.longitude]);
+    polyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
+    map.fitBounds(polyline.getBounds());
+}
