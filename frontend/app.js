@@ -197,12 +197,12 @@ function createPath() {
 
     let data = {
         "start": {
-            "latitude": markers[0].getLatLng().lat,
-            "longitude": markers[0].getLatLng().lng
+            "y": markers[0].getLatLng().lat,
+            "x": markers[0].getLatLng().lng
         },
         "end": {
-            "latitude": markers[1].getLatLng().lat,
-            "longitude": markers[1].getLatLng().lng
+            "y": markers[1].getLatLng().lat,
+            "x": markers[1].getLatLng().lng
         },
         "additional_time": additional_time,
         "additional_distance": additional_distance,
@@ -234,7 +234,7 @@ function drawPath(points) {
         map.removeLayer(polyline);
     }
 
-    let latlngs = points.map(point => [point.map_point.latitude, point.map_point.longitude]);
+    let latlngs = points.map(point => [point.map_point.y, point.map_point.x]);
     polyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
     map.fitBounds(polyline.getBounds());
 }

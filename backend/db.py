@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 import geopandas as gpd
 from sqlalchemy import text
 import pandas as pd
+from typing import Optional, List, Tuple
+from backend.constants import VELOCITY
 
 load_dotenv()
 
@@ -21,6 +23,21 @@ ROAD_TYPES = [
 ]
 
 
+class DBPoint:
+    def __init__(self, id, x, y):
+        self.id = id
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        if isinstance(other, DBPoint):
+            return self.id == other.id
+        return False
+
+    def __repr__(self):
+        return f"DBPoint(id={self.id}, x={self.x}, y={self.y})"
+
+
 class DB:
     def __init__(self) -> None:
         db_host = os.getenv("DB_HOST")
@@ -31,7 +48,7 @@ class DB:
         url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         self._engine = create_engine(url)
 
-    def get_first_n_points(self, n: int) -> gpd.GeoDataFrame:
+    def get_first_n_points(self, n: int) -> List[DBPoint]:
         query = """
         SELECT way
         FROM planet_osm_point
@@ -43,9 +60,9 @@ class DB:
             geom_col="way",
             params=(n,),
         ).to_crs("EPSG:4326")
-        return gdf
+        return [DBPoint(gpd, row.way.x, row.way.y) for idx, row in gdf.iterrows()]
 
-    def get_point_by_id(self, id: int) -> gpd.GeoDataFrame:
+    def get_point_by_id(self, id: int) -> DBPoint:
         query = """
         SELECT *
         FROM planet_osm_point
@@ -57,9 +74,9 @@ class DB:
             geom_col="way",
             params=(id,),
         ).to_crs("EPSG:4326")
-        return gdf
+        return DBPoint(gdf.index[0], gdf.iloc[0].way.x, gdf.iloc[0].way.y)
 
-    def get_nearest_point(self, x: float, y: float) -> gpd.GeoDataFrame:
+    def get_nearest_point(self, point: DBPoint) -> DBPoint:
         query = """
         WITH distances AS (
             SELECT
@@ -77,42 +94,49 @@ class DB:
             self._engine,
             geom_col="way",
             index_col="osm_id",
-            params=(x, y),
+            params=(point.x, point.y),
         ).to_crs("EPSG:4326")
-        return gdf
+        return DBPoint(gdf.index[0], gdf.iloc[0].way.x, gdf.iloc[0].way.y)
 
-    def find_shortest_path_between(self, A, B) -> gpd.GeoDataFrame:
-        with self._engine.connect() as connection:
-            print(A.index[0], B.index[0])
-            source = self._find_nearest_source(A.index[0], B.index[0])
-            target = self._find_nearest_target(B.index[0])
-            tuple_string = "("
-            for r in ROAD_TYPES:
-                tuple_string += f"''{str(r)}'',"
-            tuple_string = tuple_string[:-1]
-            tuple_string += ")"
-            query = f"""
-            select *
-            from pgr_dijkstra(
-                'select osm_id as id, source, target, ST_Length(way) as cost from planet_osm_line where highway IN {tuple_string}',
-                {source},
-                {target},
-                FALSE
-            ) as p
-                left join planet_osm_line as r on p.edge = r.osm_id
-                left join planet_osm_line_vertices_pgr as pnt on p.node = pnt.id
-            order by p.seq;
-            """
+    def find_shortest_path_between(self, A: DBPoint, B: DBPoint) -> Optional[Tuple[List[DBPoint], float]]:
+        source = self._find_nearest_source(A, B)
+        target = self._find_nearest_target(B)
+        tuple_string = "("
+        for r in ROAD_TYPES:
+            tuple_string += f"''{str(r)}'',"
+        tuple_string = tuple_string[:-1]
+        tuple_string += ")"
+        query = f"""
+        select *
+        from pgr_dijkstra(
+            'select osm_id as id, source, target, ST_Length(way) as cost from planet_osm_line where highway IN {tuple_string}',
+            {source},
+            {target},
+            FALSE
+        ) as p
+            left join planet_osm_line as r on p.edge = r.osm_id
+            left join planet_osm_line_vertices_pgr as pnt on p.node = pnt.id
+        order by p.seq;
+        """
+        try:
             gdf = gpd.GeoDataFrame.from_postgis(
                 query,
                 self._engine,
                 geom_col="the_geom",
                 index_col="osm_id",
             ).to_crs("EPSG:4326")
+            gdf = gdf.reset_index()
+            return (
+                [
+                    DBPoint(row.osm_id, row.the_geom.x, row.the_geom.y)
+                    for idx, row in gdf.iterrows()
+                ],
+                gdf.iloc[-1].agg_cost,
+            )
+        except ValueError:
+            return None, None
 
-            return gdf
-
-    def _find_nearest_source(self, start_id, end_id) -> int:
+    def _find_nearest_source(self, start: DBPoint, end: DBPoint) -> int:
         query = f"""
         WITH distances1 as (
         SELECT r.osm_id, ST_Distance(
@@ -120,7 +144,7 @@ class DB:
             ST_SetSRID((
                 SELECT way
                 FROM planet_osm_point
-                WHERE osm_id = {start_id}
+                WHERE osm_id = {start.id}
                 ), 3851)
             ) as distance
         FROM planet_osm_line as r
@@ -138,7 +162,7 @@ class DB:
             ST_SetSRID((
                 SELECT way
                 FROM planet_osm_point
-                WHERE osm_id = {end_id}
+                WHERE osm_id = {end.id}
                 ), 3851)
             ) limit 1;
         """
@@ -149,7 +173,7 @@ class DB:
             else:
                 return None
 
-    def _find_nearest_target(self, id) -> int:
+    def _find_nearest_target(self, end: DBPoint) -> int:
         query = f"""
         WITH distances as (
             SELECT r.osm_id, ST_Distance(
@@ -157,7 +181,7 @@ class DB:
                 ST_SetSRID((
                     SELECT way
                     FROM planet_osm_point
-                    WHERE osm_id = {id}
+                    WHERE osm_id = {end.id}
                     ), 3851)
                 ) as distance
             FROM planet_osm_line as r
@@ -175,16 +199,36 @@ class DB:
             else:
                 return None
 
-    def get_vertex_by_id(self, id):
-        query = """
-        SELECT *
-        FROM planet_osm_roads_vertices_pgr
-        WHERE id = %s;
+    # def get_vertex_by_id(self, id):
+    #     query = """
+    #     SELECT *
+    #     FROM planet_osm_roads_vertices_pgr
+    #     WHERE id = %s;
+    #     """
+    #     gdf = gpd.GeoDataFrame.from_postgis(
+    #         query,
+    #         self._engine,
+    #         geom_col="the_geom",
+    #         params=(id,),
+    #     ).to_crs("EPSG:4326")
+    #     return gdf
+
+    def get_valid_points(self, point: DBPoint, max_distance: float, max_time: float) -> List[DBPoint]:
+        # v = s/t -> s = v*t
+        max_distance = min(max_distance, VELOCITY * max_time)
+        query = f"""
+        SELECT *, 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) as dist
+        FROM planet_osm_point
+        WHERE 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) < {max_distance}
+        ORDER BY dist ASC;
         """
-        gdf = gpd.GeoDataFrame.from_postgis(
-            query,
-            self._engine,
-            geom_col="the_geom",
-            params=(id,),
-        ).to_crs("EPSG:4326")
-        return gdf
+        try:
+            gdf = gpd.GeoDataFrame.from_postgis(
+                query,
+                self._engine,
+                geom_col="way",
+            ).to_crs("EPSG:4326")
+            gdf = gdf.reset_index()
+            return [DBPoint(row.osm_id, row.way.x, row.way.y) for idx, row in gdf.iterrows()]
+        except ValueError:
+            return None

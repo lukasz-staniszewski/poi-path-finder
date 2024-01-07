@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field
 class MapPoint(BaseModel):
     """Point on the map"""
 
-    latitude: float = Field(description="Point's latitude")
-    longitude: float = Field(description="Point's longitude")
+    x: float = Field(description="Point's latitude")
+    y: float = Field(description="Point's longitude")
 
 
 class POI(BaseModel):
