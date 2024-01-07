@@ -68,7 +68,7 @@ class DB:
         ).to_crs("EPSG:4326")
         return gdf
 
-    def find_shortest_path_between(self, A, B) -> pd.DataFrame:
+    def find_shortest_path_between(self, A, B) -> gpd.GeoDataFrame:
         with self._engine.connect() as connection:
             source = self._find_nearest_source(A.index[0])
             target = self._find_nearest_target(B.index[0])
@@ -80,15 +80,18 @@ class DB:
                 {target},
                 FALSE
             ) as p
+                left join planet_osm_roads as r on p.edge = r.osm_id
+                left join planet_osm_roads_vertices_pgr as pnt on p.node = pnt.id
             order by p.seq;
             """
+            gdf = gpd.GeoDataFrame.from_postgis(
+                query,
+                self._engine,
+                geom_col="the_geom",
+                index_col="osm_id",
+            ).to_crs("EPSG:4326")
 
-            result = connection.execute(text(query))
-            if result:
-                df = pd.DataFrame(result.fetchall(), columns=result.keys())
-                return df
-            else:
-                return None
+            return gdf
 
     def _find_nearest_source(self, id) -> int:
         query = f"""
