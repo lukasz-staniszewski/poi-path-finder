@@ -7,6 +7,19 @@ import pandas as pd
 
 load_dotenv()
 
+ROAD_TYPES = [
+    "motorway",
+    "trunk",
+    "primary",
+    "secondary",
+    "tertiary",
+    "motorway_link",
+    "trunk_link",
+    "primary_link",
+    "secondary_link",
+    "tertiary_link",
+]
+
 
 class DB:
     def __init__(self) -> None:
@@ -70,18 +83,24 @@ class DB:
 
     def find_shortest_path_between(self, A, B) -> gpd.GeoDataFrame:
         with self._engine.connect() as connection:
-            source = self._find_nearest_source(A.index[0])
+            print(A.index[0], B.index[0])
+            source = self._find_nearest_source(A.index[0], B.index[0])
             target = self._find_nearest_target(B.index[0])
+            tuple_string = "("
+            for r in ROAD_TYPES:
+                tuple_string += f"''{str(r)}'',"
+            tuple_string = tuple_string[:-1]
+            tuple_string += ")"
             query = f"""
             select *
             from pgr_dijkstra(
-                'select osm_id as id, source, target, ST_Length(way) as cost from planet_osm_roads where highway is not null',
+                'select osm_id as id, source, target, ST_Length(way) as cost from planet_osm_line where highway IN {tuple_string}',
                 {source},
                 {target},
                 FALSE
             ) as p
-                left join planet_osm_roads as r on p.edge = r.osm_id
-                left join planet_osm_roads_vertices_pgr as pnt on p.node = pnt.id
+                left join planet_osm_line as r on p.edge = r.osm_id
+                left join planet_osm_line_vertices_pgr as pnt on p.node = pnt.id
             order by p.seq;
             """
             gdf = gpd.GeoDataFrame.from_postgis(
@@ -93,21 +112,35 @@ class DB:
 
             return gdf
 
-    def _find_nearest_source(self, id) -> int:
+    def _find_nearest_source(self, start_id, end_id) -> int:
         query = f"""
-        WITH distances as (
-            SELECT r.osm_id, ST_Distance(
-                ST_SetSRID(ST_StartPoint(r.way), 3851),
-                ST_SetSRID((
-                    SELECT way
-                    FROM planet_osm_point
-                    WHERE osm_id = {id}
-                    ), 3851)
-                ) as distance
-            FROM planet_osm_roads as r
+        WITH distances1 as (
+        SELECT r.osm_id, ST_Distance(
+            ST_SetSRID(ST_StartPoint(r.way), 3851),
+            ST_SetSRID((
+                SELECT way
+                FROM planet_osm_point
+                WHERE osm_id = {start_id}
+                ), 3851)
+            ) as distance
+        FROM planet_osm_line as r
+        WHERE r.highway IN {tuple([str(r) for r in ROAD_TYPES])}
         )
-        select r.source
-        from planet_osm_roads r join distances d on (r.osm_id = d.osm_id) order by d.distance asc limit 1;
+
+        select source from (
+            select *
+            from planet_osm_line r join distances1 d on (r.osm_id = d.osm_id)
+            where r.highway IN {tuple([str(r) for r in ROAD_TYPES])}
+            order by d.distance asc limit 10
+            ) as closest_starts
+        order by ST_Distance(
+            ST_SetSRID(ST_EndPoint(closest_starts.way), 3851),
+            ST_SetSRID((
+                SELECT way
+                FROM planet_osm_point
+                WHERE osm_id = {end_id}
+                ), 3851)
+            ) limit 1;
         """
         with self._engine.connect() as connection:
             result = connection.execute(text(query)).fetchone()
@@ -127,10 +160,13 @@ class DB:
                     WHERE osm_id = {id}
                     ), 3851)
                 ) as distance
-            FROM planet_osm_roads as r
+            FROM planet_osm_line as r
+            where r.highway IN {tuple([str(r) for r in ROAD_TYPES])}
         )
         select r.target
-        from planet_osm_roads r join distances d on (r.osm_id = d.osm_id) order by d.distance asc limit 1;
+        from planet_osm_line r join distances d on (r.osm_id = d.osm_id)
+        where r.highway IN {tuple([str(r) for r in ROAD_TYPES])}
+        order by d.distance asc limit 1;
         """
         with self._engine.connect() as connection:
             result = connection.execute(text(query)).fetchone()
@@ -138,3 +174,17 @@ class DB:
                 return result[0]
             else:
                 return None
+
+    def get_vertex_by_id(self, id):
+        query = """
+        SELECT *
+        FROM planet_osm_roads_vertices_pgr
+        WHERE id = %s;
+        """
+        gdf = gpd.GeoDataFrame.from_postgis(
+            query,
+            self._engine,
+            geom_col="the_geom",
+            params=(id,),
+        ).to_crs("EPSG:4326")
+        return gdf

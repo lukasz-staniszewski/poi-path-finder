@@ -32,7 +32,6 @@ async def amenities():
 
 @app.post("/route/", response_model=Path)
 async def create_route(route_details: RouteDetails):
-    # TODO: modify this function to return a path with points
     A = db.get_nearest_point(route_details.start.longitude, route_details.start.latitude)
     B = db.get_nearest_point(route_details.end.longitude, route_details.end.latitude)
     path = db.find_shortest_path_between(A, B)
