@@ -12,6 +12,7 @@ class PathFinder:
         self.start = self.db.get_nearest_point(start)  # DBPoint
         self.end = self.db.get_nearest_point(end)  # DBPoint
         self.shortest_path, self.shortest_cost = self.db.find_shortest_path_between(self.start, self.end)
+
         self.max_time = max_time
         self.max_distance = max_distance
         self.max_pois = max_num_pois
@@ -21,6 +22,7 @@ class PathFinder:
 
         self.curr_path = [self.start]
         self.curr_cost = 0
+        self.curr_pois = []
 
         self.last_valid_path_between_next = []
 
@@ -30,15 +32,17 @@ class PathFinder:
         self.find_path()
 
     def find_path(self):
-        while len(self.curr_path) < self.max_pois + 2:
+        while len(self.curr_pois) < self.max_pois:
             next_poi = self.select_next_poi()
             if next_poi is None:
                 break
 
         if len(self.last_valid_path_between_next):
-            self.curr_path.append(self.last_valid_path_between_next[-1])
+            self.curr_path.extend(self.last_valid_path_between_next[:-1])
         else:
-            self.curr_path.extend(self.db.find_shortest_path_between(self.curr_path[-1], self.end)[0])
+            self.curr_path.extend(self.db.find_shortest_path_between(self.curr_path[-1], self.end)[:-1])
+
+        self.curr_path.append(self.end)
 
     def select_next_poi(self):
         pois = self.db.get_valid_points(
@@ -56,7 +60,7 @@ class PathFinder:
                 if heuristic < lowest_heuristic:
                     lowest_heuristic = heuristic
                     next_poi = poi
-        print(next_poi)
+        print(f"best poi: {next_poi}, H: {lowest_heuristic}")
         if not next_poi or not self.update_path(next_poi):
             return None
 
@@ -71,7 +75,6 @@ class PathFinder:
         if path_between_prev is None or path_between_next is None:
             return False
 
-        print(cost_between_next, cost_between_prev)
         curr_total_cost = self.curr_cost + cost_between_prev + cost_between_next
         curr_additional_distance = curr_total_cost - self.shortest_cost
         curr_additional_time = curr_additional_distance / VELOCITY
@@ -85,12 +88,13 @@ class PathFinder:
             self.curr_path.extend(path_between_prev[:-1] + [new_point])
             self.curr_cost += cost_between_prev
             self.last_valid_path_between_next = path_between_next
+            self.curr_pois.append(new_point)
             return True
 
     def calculate_heuristic(self, new_point: DBPoint):
-        H = self.ALPHA * self.dist_from_shortest_line(new_point) + self.BETA * self.dist_between_points(
-            new_point
-        )
+        a = self.dist_from_shortest_line(new_point)
+        b = self.dist_between_points(new_point)
+        H = self.ALPHA * a + self.BETA * b
         return H
 
     def dist_from_shortest_line(self, point: DBPoint):
