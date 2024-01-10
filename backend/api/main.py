@@ -44,17 +44,21 @@ async def create_route(route_details: RouteDetails):
     pois_ids = set([poi[0].id for poi in pois])
 
     points = []
-    for point, p_time, p_type in path:
+    for i in range(len(path)):
+        point = path[i]
+        is_poi = point.id in pois_ids
         points.append(
             {
                 "map_point": MapPoint(x=point.x, y=point.y),
-                "is_poi": point.id in pois_ids,
+                "is_poi": is_poi,
                 "poi_details": POI(
-                    type=p_type,
-                    visit_time=p_time,
+                    type=pois[0][2] if is_poi else None,
+                    visit_time=pois[0][1] if is_poi else None,
                 ).model_dump(),
             }
         )
+        if is_poi:
+            pois.pop(0)
 
     return Path(
         points=points,
