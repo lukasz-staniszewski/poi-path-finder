@@ -50,7 +50,7 @@ class PathFinder:
         if len(self.last_valid_path_between_next):
             self.curr_path.extend(self.last_valid_path_between_next[:-1])
         else:
-            self.curr_path.extend(self.db.find_shortest_path_between(self.curr_path[-1], self.end)[:-1])
+            self.curr_path.extend(self.db.find_shortest_path_between(self.curr_path[-1], self.end)[0][:-1])
 
         self.curr_path.append(self.end)
 
@@ -100,7 +100,7 @@ class PathFinder:
             self.curr_cost += cost_between_prev
             self.curr_time += cost_between_prev / VELOCITY
             self.last_valid_path_between_next = path_between_next
-            self.curr_pois.append(new_point)
+            self.curr_pois.append((new_point, self.pois_order[len(self.curr_pois)].visit_time, self.pois_order[len(self.curr_pois)]))
             return True
 
     def calculate_heuristic(self, new_point: DBPoint):

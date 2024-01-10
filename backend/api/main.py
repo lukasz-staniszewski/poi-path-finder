@@ -40,16 +40,24 @@ async def create_route(route_details: RouteDetails):
     )
 
     path = finder.curr_path
-    print(path)
+    pois = finder.curr_pois
+    pois_ids = set([poi[0].id for poi in pois])
+
+    points = []
+    for point, p_time, p_type in path:
+        points.append(
+            {
+                "map_point": MapPoint(x=point.x, y=point.y),
+                "is_poi": point.id in pois_ids,
+                "poi_details": POI(
+                    type=p_type,
+                    visit_time=p_time,
+                ).model_dump(),
+            }
+        )
 
     return Path(
-        points=[
-            {
-                "map_point": MapPoint(x=p.x, y=p.y),
-                "is_poi": False,
-            }
-            for p in path
-        ],
-        path_time=route_details.additional_time,
-        path_distance=route_details.additional_distance,
+        points=points,
+        path_time=finder.curr_time / 60,
+        path_distance=finder.curr_cost / 1000,
     ).model_dump()
