@@ -1,1 +1,1 @@
-VELOCITY = 60
+VELOCITY = 16 # m/s

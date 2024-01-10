@@ -1,11 +1,18 @@
 from backend.db import DB, DBPoint
-from backend.api.schemas import AmenitiesList, Path, RouteDetails, MapPoint
+from backend.api.schemas import AmenitiesList, Path, RouteDetails, POI, MapPoint
 from backend.constants import VELOCITY
+from typing import List
 
 
 class PathFinder:
     def __init__(
-        self, start: MapPoint, end: MapPoint, max_time: float, max_distance: float, max_num_pois: int
+        self,
+        start: MapPoint,
+        end: MapPoint,
+        max_time: float,
+        max_distance: float,
+        max_num_pois: int,
+        pois_order: List[POI],
     ):
         self.db = DB()
 
@@ -13,8 +20,8 @@ class PathFinder:
         self.end = self.db.get_nearest_point(end)  # DBPoint
         self.shortest_path, self.shortest_cost = self.db.find_shortest_path_between(self.start, self.end)
 
-        self.max_time = max_time
-        self.max_distance = max_distance
+        self.max_time = max_time * 60  # to seconds
+        self.max_distance = max_distance * 1000  # to meters
         self.max_pois = max_num_pois
 
         self.shortest_line_a = (self.start.y - self.end.y) / (self.start.x - self.end.x)
@@ -22,12 +29,15 @@ class PathFinder:
 
         self.curr_path = [self.start]
         self.curr_cost = 0
+        self.curr_time = 0
         self.curr_pois = []
 
         self.last_valid_path_between_next = []
 
         self.ALPHA = 1
         self.BETA = 1
+
+        self.pois_order = pois_order
 
         self.find_path()
 
@@ -49,18 +59,20 @@ class PathFinder:
             self.curr_path[-1],
             self.max_distance,
             self.max_time,
+            self.pois_order[len(self.curr_pois)].visit_time * 60,
+            self.pois_order[len(self.curr_pois)].type.lower().replace(" ", "_"),
         )
 
         lowest_heuristic = float("inf")
         next_poi = None
 
-        for poi in pois:
-            if poi not in self.curr_path:
-                heuristic = self.calculate_heuristic(poi)
-                if heuristic < lowest_heuristic:
-                    lowest_heuristic = heuristic
-                    next_poi = poi
-        print(f"best poi: {next_poi}, H: {lowest_heuristic}")
+        if pois:
+            for poi in pois:
+                if poi not in self.curr_path:
+                    heuristic = self.calculate_heuristic(poi)
+                    if heuristic < lowest_heuristic:
+                        lowest_heuristic = heuristic
+                        next_poi = poi
         if not next_poi or not self.update_path(next_poi):
             return None
 
@@ -78,15 +90,15 @@ class PathFinder:
         curr_total_cost = self.curr_cost + cost_between_prev + cost_between_next
         curr_additional_distance = curr_total_cost - self.shortest_cost
         curr_additional_time = curr_additional_distance / VELOCITY
-        print("curr_additional_distance", curr_additional_distance)
-        print("curr_additional_time", curr_additional_time)
-        print("curr_total_cost", curr_total_cost)
+        print(f"curr_additional_distance: {curr_additional_distance}m")
+        print(f"curr_additional_time: {curr_additional_time}s")
 
         if curr_additional_distance > self.max_distance or curr_additional_time > self.max_time:
             return False
         else:
             self.curr_path.extend(path_between_prev[:-1] + [new_point])
             self.curr_cost += cost_between_prev
+            self.curr_time += cost_between_prev / VELOCITY
             self.last_valid_path_between_next = path_between_next
             self.curr_pois.append(new_point)
             return True

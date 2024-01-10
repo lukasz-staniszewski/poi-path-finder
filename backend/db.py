@@ -213,13 +213,14 @@ class DB:
     #     ).to_crs("EPSG:4326")
     #     return gdf
 
-    def get_valid_points(self, point: DBPoint, max_distance: float, max_time: float) -> List[DBPoint]:
+    def get_valid_points(self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str) -> List[DBPoint]:
         # v = s/t -> s = v*t
         max_distance = min(max_distance, VELOCITY * max_time)
+        min_distance = VELOCITY * min_time
         query = f"""
         SELECT *, 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) as dist
         FROM planet_osm_point
-        WHERE 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) < {max_distance}
+        WHERE 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) < {max_distance} AND 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) > {min_distance} AND amenity = '{amenity}'
         ORDER BY dist ASC;
         """
         try:
@@ -228,7 +229,7 @@ class DB:
                 self._engine,
                 geom_col="way",
             ).to_crs("EPSG:4326")
-            gdf = gdf.reset_index()
+            gdf = gdf.reset_index()[1:] # first row is the point itself
             return [DBPoint(row.osm_id, row.way.x, row.way.y) for idx, row in gdf.iterrows()]
         except ValueError:
             return None

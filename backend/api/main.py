@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.constants import AMENITIES
-from backend.api.schemas import AmenitiesList, Path, RouteDetails, MapPoint
+from backend.api.schemas import AmenitiesList, Path, RouteDetails, MapPoint, POI
 from backend.pathfinder import PathFinder
 
 app = FastAPI()
@@ -36,6 +36,7 @@ async def create_route(route_details: RouteDetails):
         max_time=route_details.additional_time,
         max_distance=route_details.additional_distance,
         max_num_pois=len(route_details.pois),
+        pois_order=route_details.pois,
     )
 
     path = finder.curr_path
