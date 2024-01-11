@@ -1,7 +1,14 @@
-from backend.db import DB, DBPoint
-from backend.api.schemas import AmenitiesList, Path, RouteDetails, POI, MapPoint
-from backend.constants import VELOCITY
 from typing import List
+
+from backend.api.schemas import (
+    POI,
+    AmenitiesList,
+    MapPoint,
+    Path,
+    RouteDetails,
+)
+from backend.constants import VELOCITY
+from backend.db import DB, DBPoint
 
 
 class PathFinder:
@@ -19,6 +26,7 @@ class PathFinder:
         self.start = self.db.get_nearest_point(start)  # DBPoint
         self.end = self.db.get_nearest_point(end)  # DBPoint
         self.shortest_path, self.shortest_cost = self.db.find_shortest_path_between(self.start, self.end)
+        assert self.shortest_path is not None
 
         self.max_time = max_time * 60  # to seconds
         self.max_distance = max_distance * 1000  # to meters
@@ -63,30 +71,39 @@ class PathFinder:
             self.pois_order[len(self.curr_pois)].type.lower().replace(" ", "_"),
         )
 
-        lowest_heuristic = float("inf")
-        next_poi = None
+        next_poi, path_before, cost_before, path_next, cost_next = None, None, None, None, None
+        pois_heuristics = []
 
         if pois:
-            for poi in pois:
-                if poi not in self.curr_path:
-                    heuristic = self.calculate_heuristic(poi)
-                    if heuristic < lowest_heuristic:
-                        lowest_heuristic = heuristic
-                        next_poi = poi
-        if not next_poi or not self.update_path(next_poi):
+            pois_heuristics = map(lambda poi: (poi, self.calculate_heuristic(poi)), pois)
+            pois_heuristics = sorted(pois_heuristics, key=lambda x: x[1])
+            for idx, (poi, _) in enumerate(pois_heuristics):
+                print("FINDING POI | ITERATION: ", idx)
+                path_between_prev, cost_between_prev = self.db.find_shortest_path_between(
+                    self.curr_path[-1], poi
+                )
+                path_between_next, cost_between_next = self.db.find_shortest_path_between(poi, self.end)
+                print(path_between_prev, path_between_next)
+                if path_between_prev is None or path_between_next is None:
+                    continue
+                else:
+                    next_poi, path_before, cost_before, path_next, cost_next = (
+                        poi,
+                        path_between_prev,
+                        cost_between_prev,
+                        path_between_next,
+                        cost_between_next,
+                    )
+                    break
+
+        if not next_poi or not self.update_path(next_poi, path_before, cost_before, path_next, cost_next):
             return None
 
         return next_poi
 
-    def update_path(self, new_point: DBPoint):
-        path_between_prev, cost_between_prev = self.db.find_shortest_path_between(
-            self.curr_path[-1], new_point
-        )
-        path_between_next, cost_between_next = self.db.find_shortest_path_between(new_point, self.end)
-
-        if path_between_prev is None or path_between_next is None:
-            return False
-
+    def update_path(
+        self, new_point: DBPoint, path_between_prev, cost_between_prev, path_between_next, cost_between_next
+    ):
         curr_total_cost = self.curr_cost + cost_between_prev + cost_between_next
         curr_additional_distance = curr_total_cost - self.shortest_cost
         curr_additional_time = curr_additional_distance / VELOCITY
@@ -100,7 +117,13 @@ class PathFinder:
             self.curr_cost += cost_between_prev
             self.curr_time += cost_between_prev / VELOCITY
             self.last_valid_path_between_next = path_between_next
-            self.curr_pois.append((new_point, self.pois_order[len(self.curr_pois)].visit_time, self.pois_order[len(self.curr_pois)].type))
+            self.curr_pois.append(
+                (
+                    new_point,
+                    self.pois_order[len(self.curr_pois)].visit_time,
+                    self.pois_order[len(self.curr_pois)].type,
+                )
+            )
             return True
 
     def calculate_heuristic(self, new_point: DBPoint):

@@ -223,6 +223,7 @@ class DB:
         WHERE 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) < {max_distance} AND 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) > {min_distance} AND amenity = '{amenity}'
         ORDER BY dist ASC;
         """
+        print(query)
         try:
             gdf = gpd.GeoDataFrame.from_postgis(
                 query,
