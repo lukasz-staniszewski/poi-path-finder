@@ -25,6 +25,15 @@ let redIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
+let orangeIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
 let map = L.map('map', {
     maxBounds: [[MAP_BOUNDS.SOUTH, MAP_BOUNDS.WEST], [MAP_BOUNDS.NORTH, MAP_BOUNDS.EAST]],
     minZoom: MINZOOM,
@@ -119,13 +128,13 @@ function createPOIInputs() {
 }
 
 function addMarker(lat, lng, isFirst) {
-    var icon = isFirst ? greenIcon : redIcon;
-    var marker = L.marker([lat, lng], {
+    let icon = isFirst ? greenIcon : redIcon;
+    let marker = L.marker([lat, lng], {
         draggable: true,
         icon: icon
     }).addTo(map).bindTooltip(isFirst ? "Start" : "End", { permanent: true, offset: [0, 0] });
 
-    var initialPosition = [lat, lng];
+    let initialPosition = [lat, lng];
     marker.on('dragend', function (e) {
         if (!bounds.contains(e.target.getLatLng())) {
             e.target.setLatLng(initialPosition);
@@ -152,9 +161,6 @@ function updatePath() {
     }
 };
 
-function get_amenities() {
-
-}
 
 map.on('click', function (e) {
     if (!bounds.contains(e.latlng) || !isWithinMapBounds(e.latlng.lat, e.latlng.lng)) {
@@ -209,6 +215,7 @@ function createPath() {
         "pois": pois
     };
 
+
     fetch('http://localhost:8000/route/', {
         method: 'POST',
         headers: {
@@ -229,12 +236,49 @@ function createPath() {
 };
 
 function drawPath(points) {
-
     if (polyline) {
         map.removeLayer(polyline);
     }
 
     let latlngs = points.map(point => [point.map_point.y, point.map_point.x]);
+
     polyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
     map.fitBounds(polyline.getBounds());
+
+    points.forEach(point => {
+        if (point.is_poi) {
+            let marker = L.marker([point.map_point.y, point.map_point.x], {
+                draggable: false,
+                icon: orangeIcon
+            })
+            marker.addTo(map).bindTooltip(point.poi_details.type + "(" + point.poi_details.visit_time + "m)", { permanent: true, offset: [0, 0] });
+        };}
+    );
 }
+
+// {
+//     "start": {
+//         "y": 52.24189997298265,
+//         "x": 20.931916236877445
+//     },
+//     "end": {
+//         "y": 52.219896288011746,
+//         "x": 21.011803150177002
+//     },
+//     "additional_time": "100000",
+//     "additional_distance": "1000000",
+//     "pois": [
+//         {
+//             "type": "School",
+//             "visit_time": "10"
+//         },
+//         {
+//             "type": "Restaurant",
+//             "visit_time": "20"
+//         },
+//         {
+//             "type": "Car wash",
+//             "visit_time": "30"
+//         }
+//     ]
+// }
