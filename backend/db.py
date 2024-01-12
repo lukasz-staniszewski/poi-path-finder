@@ -5,7 +5,7 @@ import geopandas as gpd
 from sqlalchemy import text
 import pandas as pd
 from typing import Optional, List, Tuple
-from backend.constants import VELOCITY
+from backend.constants import VELOCITY, INIT_BUFFER_RADIUS, MAX_BUFFER_RADIUS
 
 load_dotenv()
 
@@ -127,10 +127,7 @@ class DB:
             ).to_crs("EPSG:4326")
             gdf = gdf.reset_index()
             return (
-                [
-                    DBPoint(row.osm_id, row.the_geom.x, row.the_geom.y)
-                    for idx, row in gdf.iterrows()
-                ],
+                [DBPoint(row.osm_id, row.the_geom.x, row.the_geom.y) for idx, row in gdf.iterrows()],
                 gdf.iloc[-1].agg_cost,
             )
         except ValueError:
@@ -213,23 +210,44 @@ class DB:
     #     ).to_crs("EPSG:4326")
     #     return gdf
 
-    def get_valid_points(self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str) -> List[DBPoint]:
+    def get_valid_points(
+        self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str
+    ) -> List[DBPoint]:
         # v = s/t -> s = v*t
         max_distance = min(max_distance, VELOCITY * max_time)
         min_distance = VELOCITY * min_time
-        query = f"""
-        SELECT *, 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) as dist
-        FROM planet_osm_point
-        WHERE 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) < {max_distance} AND 111320 * ST_Distance(ST_Transform(way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) > {min_distance} AND amenity = '{amenity}'
-        ORDER BY dist ASC;
-        """
-        try:
-            gdf = gpd.GeoDataFrame.from_postgis(
-                query,
-                self._engine,
-                geom_col="way",
-            ).to_crs("EPSG:4326")
-            gdf = gdf.reset_index()[1:] # first row is the point itself
-            return [DBPoint(row.osm_id, row.way.x, row.way.y) for idx, row in gdf.iterrows()]
-        except ValueError:
-            return None
+        curr_radius = INIT_BUFFER_RADIUS
+        gdf = None
+        while (curr_radius < MAX_BUFFER_RADIUS) and (111320 * curr_radius < max_distance) and (gdf is None or gdf.shape[0] == 0):
+            query = f"""
+            SELECT *, 111320 * ST_Distance(ST_Transform(bp.way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) as dist
+            FROM (
+                SELECT *
+                FROM planet_osm_point
+                WHERE ST_Within(
+                    ST_Transform(way, 4326), (
+                    SELECT ST_Buffer(
+                        ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326),
+                        {curr_radius}
+                    )))
+            ) as bp
+            WHERE 111320 * ST_Distance(ST_Transform(bp.way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) < {max_distance} AND 111320 * ST_Distance(ST_Transform(bp.way, 4326), ST_SetSRID(ST_MakePoint({point.x}, {point.y}), 4326)) > {min_distance} AND bp.amenity = '{amenity}'
+            ORDER BY dist ASC;
+            """
+            try:
+                gdf = gpd.GeoDataFrame.from_postgis(
+                    query,
+                    self._engine,
+                    geom_col="way",
+                ).to_crs("EPSG:4326")
+                gdf = gdf.reset_index()[1:]  # first row is the point itself
+            except ValueError:
+                pass
+            finally:
+                curr_radius *= 2
+
+        return (
+            [DBPoint(row.osm_id, row.way.x, row.way.y) for idx, row in gdf.iterrows()]
+            if gdf is not None
+            else None
+        )
