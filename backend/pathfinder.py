@@ -1,6 +1,6 @@
 from backend.db import DB, DBPoint
-from backend.api.schemas import AmenitiesList, Path, RouteDetails, POI, MapPoint
-from backend.constants import VELOCITY
+from backend.api.schemas import POI, MapPoint
+from backend.constants import VELOCITY, ALPHA, BETA
 from typing import List
 
 
@@ -33,9 +33,6 @@ class PathFinder:
         self.curr_pois = []
 
         self.last_valid_path_between_next = []
-
-        self.ALPHA = 1
-        self.BETA = 1
 
         self.pois_order = pois_order
 
@@ -106,7 +103,7 @@ class PathFinder:
     def calculate_heuristic(self, new_point: DBPoint):
         a = self.dist_from_shortest_line(new_point)
         b = self.dist_between_points(new_point)
-        H = self.ALPHA * a + self.BETA * b
+        H = ALPHA * a + BETA * b
         return H
 
     def dist_from_shortest_line(self, point: DBPoint):
