@@ -96,9 +96,9 @@ class DB:
         tuple_string = tuple_string[:-1]
         tuple_string += ")"
         query = f"""
-        SELECT *
-        FROM pgr_dijkstra(
-            'select osm_id as id, source, target, ST_Length(way) as cost FROM planet_osm_line where highway IN {tuple_string}',
+        select *
+        from pgr_dijkstra(
+            'select osm_id as id, source, target, ST_Length(way) as cost, ST_Length(way) as reverse_cost from planet_osm_line where highway IS NOT NULL',
             {source},
             {target},
             FALSE
@@ -107,6 +107,7 @@ class DB:
             LEFT JOIN planet_osm_line_vertices_pgr as pnt on p.node = pnt.id
         ORDER BY p.seq;
         """
+        print(query)
         try:
             gdf = gpd.GeoDataFrame.from_postgis(
                 query,

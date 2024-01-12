@@ -105,7 +105,7 @@ class PathFinder:
 
     def calculate_heuristic(self, new_point: DBPoint):
         a = self.dist_from_shortest_line(new_point)
-        b = self.dist_between_points(new_point)
+        b = self.dist_between_points(proposed_point=new_point, relative_point=self.end)
         H = self.ALPHA * a + self.BETA * b
         return H
 
@@ -115,5 +115,7 @@ class PathFinder:
             / (self.shortest_line_a**2 + 1) ** 0.5
         )
 
-    def dist_between_points(self, point: DBPoint):
-        return ((self.curr_path[-1].x - point.x) ** 2 + (self.curr_path[-1].y - point.y) ** 2) ** 0.5
+    def dist_between_points(self, proposed_point: DBPoint, relative_point: DBPoint = None):
+        if relative_point is None:
+            relative_point = self.curr_path[-1]
+        return ((relative_point.x - proposed_point.x) ** 2 + (relative_point.y - proposed_point.y) ** 2) ** 0.5
