@@ -97,6 +97,8 @@ class PathFinder:
             self.curr_cost += cost_between_prev
             self.curr_time += cost_between_prev / VELOCITY
             self.last_valid_path_between_next = path_between_next
+            self.max_distance -= curr_additional_distance
+            self.max_time -= curr_additional_time
             self.curr_pois.append((new_point, self.pois_order[len(self.curr_pois)].visit_time, self.pois_order[len(self.curr_pois)].type))
             return True
 
