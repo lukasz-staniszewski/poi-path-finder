@@ -102,7 +102,7 @@ class PathFinder:
 
     def calculate_heuristic(self, new_point: DBPoint):
         a = self.dist_from_shortest_line(new_point)
-        b = self.dist_between_points(new_point)
+        b = self.dist_between_points(new_point, self.end)
         H = ALPHA * a + BETA * b
         return H
 
