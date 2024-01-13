@@ -24,6 +24,15 @@ ROAD_TYPES = [
 
 
 class DBPoint:
+    """
+    Represents a point in the database.
+
+    Attributes:
+        id (int): The ID of the point.
+        x (float): The x-coordinate of the point.
+        y (float): The y-coordinate of the point.
+    """
+
     def __init__(self, id, x, y):
         self.id = id
         self.x = x
@@ -39,6 +48,31 @@ class DBPoint:
 
 
 class DB:
+    """
+    Represents a database connection and provides methods for querying and manipulating data.
+
+    Attributes:
+        _engine (sqlalchemy.engine.Engine): The database engine used for the connection.
+
+    Methods:
+        get_point_by_id(id: int) -> DBPoint:
+            Retrieves a point from the database based on its ID.
+
+        get_nearest_point(point: DBPoint) -> Optional[DBPoint]:
+            Retrieves the nearest point to the given point from the database.
+
+        find_shortest_path_between(A: DBPoint, B: DBPoint) -> Optional[Tuple[List[DBPoint], float]]:
+            Finds the shortest path between two points using the Dijkstra algorithm.
+
+        _find_nearest_source(start: DBPoint, end: DBPoint) -> int:
+            Finds the nearest source of the road to the given start and end points.
+
+        _find_nearest_target(end: DBPoint) -> int:
+            Finds the nearest target of the road to the given end point.
+
+        get_valid_points(point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str) -> List[DBPoint]:
+            Retrieves a list of valid points based on the given criteria.
+    """
     def __init__(self) -> None:
         db_host = os.getenv("DB_HOST")
         db_port = os.getenv("DB_PORT")
@@ -62,6 +96,15 @@ class DB:
         return DBPoint(gdf.index[0], gdf.iloc[0].way.x, gdf.iloc[0].way.y)
 
     def get_nearest_point(self, point: DBPoint) -> Optional[DBPoint]:
+        """
+        Retrieves the nearest point to the given point from the database.
+
+        Args:
+            point (DBPoint): The point to find the nearest point to.
+
+        Returns:
+            Optional[DBPoint]: The nearest point as a DBPoint object, or None if no point is found.
+        """
         curr_radius = INIT_BUFFER_RADIUS
         gdf = None
         while (curr_radius < MAX_BUFFER_RADIUS) and (gdf is None or gdf.shape[0] == 0):
@@ -88,6 +131,16 @@ class DB:
         return DBPoint(gdf.index[0], gdf.iloc[0].way.x, gdf.iloc[0].way.y)
 
     def find_shortest_path_between(self, A: DBPoint, B: DBPoint) -> Optional[Tuple[List[DBPoint], float]]:
+        """
+        Finds the shortest path between two DBPoints using Dijsktra algorithm.
+
+        Args:
+            A (DBPoint): The starting point.
+            B (DBPoint): The ending point.
+
+        Returns:
+            Optional[Tuple[List[DBPoint], float]]: A tuple containing a list of DBPoints representing the shortest path and the total cost of the path. Returns None if no path is found.
+        """
         source = self._find_nearest_source(A, B)
         target = self._find_nearest_target(B)
         tuple_string = "("
@@ -127,6 +180,16 @@ class DB:
             return None, None
 
     def _find_nearest_source(self, start: DBPoint, end: DBPoint) -> int:
+        """
+        Finds the nearest source of the road to the given start and end points.
+
+        Args:
+            start (DBPoint): The starting point.
+            end (DBPoint): The ending point.
+
+        Returns:
+            int: The ID of the nearest source point.
+        """
         curr_radius = INIT_BUFFER_RADIUS
         result = None
         with self._engine.connect() as connection:
@@ -163,6 +226,15 @@ class DB:
             return result[0]
 
     def _find_nearest_target(self, end: DBPoint) -> int:
+        """
+        Finds the nearest target of the road based on the given end point.
+
+        Args:
+            end (DBPoint): The end point to find the nearest target for.
+
+        Returns:
+            int: The ID of the nearest target.
+        """
         curr_radius = INIT_BUFFER_RADIUS
         result = None
         with self._engine.connect() as connection:
@@ -192,8 +264,21 @@ class DB:
             return result[0]
 
     def get_valid_points(
-        self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str
-    ) -> List[DBPoint]:
+            self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str
+        ) -> List[DBPoint]:
+        """
+        Retrieves a list of valid points within a specified distance and time range from a given point.
+
+        Args:
+            point (DBPoint): The reference point.
+            max_distance (float): The maximum distance from the reference point.
+            max_time (float): The maximum time it takes to reach the points from the reference point.
+            min_time (float): The minimum time it takes to reach the points from the reference point.
+            amenity (str): The type of amenity to filter the points.
+
+        Returns:
+            List[DBPoint]: A list of valid points within the specified distance and time range.
+        """
         # v = s/t -> s = v*t
         max_distance = min(max_distance, VELOCITY * max_time)
         min_distance = VELOCITY * min_time
