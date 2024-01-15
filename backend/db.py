@@ -1,11 +1,17 @@
-from sqlalchemy import create_engine
 import os
-from dotenv import load_dotenv
+from typing import List, Optional, Tuple
+
 import geopandas as gpd
-from sqlalchemy import text
 import pandas as pd
-from typing import Optional, List, Tuple
-from backend.constants import VELOCITY, INIT_BUFFER_RADIUS, MAX_BUFFER_RADIUS
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+
+from backend.constants import (
+    INIT_BUFFER_DIJKSTRA,
+    INIT_BUFFER_RADIUS,
+    MAX_BUFFER_RADIUS,
+    VELOCITY,
+)
 
 load_dotenv()
 
@@ -73,6 +79,7 @@ class DB:
         get_valid_points(point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str) -> List[DBPoint]:
             Retrieves a list of valid points based on the given criteria.
     """
+
     def __init__(self) -> None:
         db_host = os.getenv("DB_HOST")
         db_port = os.getenv("DB_PORT")
@@ -141,43 +148,53 @@ class DB:
         Returns:
             Optional[Tuple[List[DBPoint], float]]: A tuple containing a list of DBPoints representing the shortest path and the total cost of the path. Returns None if no path is found.
         """
+        print("Dijkstra | Finding source and target...")
         source = self._find_nearest_source(A, B)
+        print("Dijkstra | Source found")
         target = self._find_nearest_target(B)
-        tuple_string = "("
-        for r in ROAD_TYPES:
-            tuple_string += f"''{str(r)}'',"
-        tuple_string = tuple_string[:-1]
-        tuple_string += ")"
-        query = f"""
-        select *
-        from pgr_dijkstra(
-            'select osm_id as id, source, target, ST_Length(way) as cost, ST_Length(way) as reverse_cost from planet_osm_line where highway IS NOT NULL',
-            {source},
-            {target},
-            FALSE
-        ) as p
-            LEFT JOIN planet_osm_line as r on p.edge = r.osm_id
-            LEFT JOIN planet_osm_line_vertices_pgr as pnt on p.node = pnt.id
-        ORDER BY p.seq;
-        """
-        print(query)
-        try:
-            gdf = gpd.GeoDataFrame.from_postgis(
-                query,
-                self._engine,
-                geom_col="the_geom",
-                index_col="osm_id",
-            )
-            gdf = gdf.reset_index()
-            return (
-                [
-                    DBPoint(row.osm_id, row.the_geom.x, row.the_geom.y)
-                    for idx, row in gdf.to_crs("EPSG:4326").iterrows()
-                ],
-                gdf.iloc[-1].agg_cost,
-            )
-        except ValueError:
-            return None, None
+        print("Dijkstra | Target found")
+
+        path = []
+        expand = 10000
+        while len(path) == 0 and expand < 1000000:
+            query = f"""
+            SELECT *
+            FROM pgr_dijkstra(
+                'SELECT osm_id as id, source, target, ST_Length(way) as cost 
+                FROM planet_osm_line as rr,
+                    (SELECT ST_Expand(ST_Extent(l1.way),{expand}) as box  FROM planet_osm_line as l1 WHERE l1.source = {source} OR l1.target = {target}) as box
+                WHERE rr.way && box.box AND rr.highway IS NOT NULL',
+                {source}, {target}, false
+            ) as r
+            INNER JOIN planet_osm_line as g ON r.edge = g.osm_id
+            LEFT JOIN planet_osm_line_vertices_pgr as pnt on r.node = pnt.id;
+            """
+
+            print(f"Dijkstra | Finding shortest path for expand={expand}m...")
+            try:
+                gdf = gpd.GeoDataFrame.from_postgis(
+                    query,
+                    self._engine,
+                    geom_col="the_geom",
+                    index_col="osm_id",
+                )
+                gdf = gdf.reset_index()
+                if len(gdf) == 0:
+                    expand *= 2
+                    continue
+                print("Dijkstra | Shortest path found")
+                return (
+                    [
+                        DBPoint(row.osm_id, row.the_geom.x, row.the_geom.y)
+                        for idx, row in gdf.to_crs("EPSG:4326").iterrows()
+                    ],
+                    gdf.iloc[-1].agg_cost,
+                )
+            except ValueError as e:
+                print("Dijkstra | Shortest path not found: " + str(e))
+                return None, None
+        print("Dijkstra | Shortest path not found")
+        return ([], 0)
 
     def _find_nearest_source(self, start: DBPoint, end: DBPoint) -> int:
         """
@@ -190,7 +207,7 @@ class DB:
         Returns:
             int: The ID of the nearest source point.
         """
-        curr_radius = INIT_BUFFER_RADIUS
+        curr_radius = INIT_BUFFER_DIJKSTRA
         result = None
         with self._engine.connect() as connection:
             while curr_radius < MAX_BUFFER_RADIUS and (result is None or len(result) == 0):
@@ -237,7 +254,7 @@ class DB:
         Returns:
             int: The ID of the nearest target.
         """
-        curr_radius = INIT_BUFFER_RADIUS
+        curr_radius = INIT_BUFFER_DIJKSTRA
         result = None
         with self._engine.connect() as connection:
             while curr_radius < MAX_BUFFER_RADIUS and (result is None or len(result) == 0):
@@ -267,8 +284,8 @@ class DB:
             return result[0]
 
     def get_valid_points(
-            self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str
-        ) -> List[DBPoint]:
+        self, point: DBPoint, max_distance: float, max_time: float, min_time: float, amenity: str
+    ) -> List[DBPoint]:
         """
         Retrieves a list of valid points within a specified distance and time range from a given point.
 
