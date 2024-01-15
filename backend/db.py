@@ -9,8 +9,9 @@ from sqlalchemy import create_engine, text
 from backend.constants import (
     INIT_BUFFER_DIJKSTRA,
     INIT_BUFFER_RADIUS,
+    INIT_BUFFER_VALID_POINTS,
     MAX_BUFFER_RADIUS,
-    VELOCITY,
+    VELOCITY
 )
 
 load_dotenv()
@@ -156,7 +157,7 @@ class DB:
 
         path = []
         expand = 10000
-        while len(path) == 0 and expand < 1000000:
+        while len(path) == 0 and expand < 3000000:
             query = f"""
             SELECT *
             FROM pgr_dijkstra(
@@ -180,7 +181,7 @@ class DB:
                 )
                 gdf = gdf.reset_index()
                 if len(gdf) == 0:
-                    expand *= 2
+                    expand *= 4
                     continue
                 print("Dijkstra | Shortest path found")
                 return (
@@ -207,7 +208,7 @@ class DB:
         Returns:
             int: The ID of the nearest source point.
         """
-        curr_radius = INIT_BUFFER_DIJKSTRA
+        curr_radius = INIT_BUFFER_RADIUS
         result = None
         with self._engine.connect() as connection:
             while curr_radius < MAX_BUFFER_RADIUS and (result is None or len(result) == 0):
@@ -302,7 +303,7 @@ class DB:
         # v = s/t -> s = v*t
         max_distance = min(max_distance, VELOCITY * max_time)
         min_distance = VELOCITY * min_time
-        curr_radius = INIT_BUFFER_RADIUS
+        curr_radius = INIT_BUFFER_VALID_POINTS
         gdf = None
         while (
             (curr_radius < MAX_BUFFER_RADIUS)
