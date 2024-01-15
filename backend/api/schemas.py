@@ -33,17 +33,18 @@ class PathPoint(BaseModel):
     map_point: MapPoint
     is_poi: bool = Field(description="Is point of interest", default=False)
     poi_details: POI | None = Field(description="Details of the POI", default=None)
-    dist_from_start: float | None = Field(description="Distance from start")
-    time_from_start: float | None = Field(description="Time from start")
+    dist_from_start: str | None = Field(description="Distance from start")
+    time_from_start: str | None = Field(description="Time from start")
 
 class Path(BaseModel):
     """Response path with points"""
 
+    shortest_points: List[PathPoint] = Field(description="List of points on the shortest path")
     points: List[PathPoint] = Field(description="List of points on the path")
-    path_time: float = Field(description="Time of the path")
-    path_distance: float = Field(description="Distance of the path")
-    additional_distance: float = Field(description="Additional distance")
-    additional_time: float = Field(description="Additional time")
+    path_time: str = Field(description="Time of the path")
+    path_distance: str = Field(description="Distance of the path")
+    additional_distance: str = Field(description="Additional distance")
+    additional_time: str = Field(description="Additional time")
 
 class AmenitiesList(BaseModel):
     """List of amenities"""

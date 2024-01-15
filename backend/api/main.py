@@ -39,9 +39,23 @@ async def create_route(route_details: RouteDetails):
         pois_order=route_details.pois,
     )
 
+    shortest_path = finder.shortest_path
     path = finder.curr_path
     pois = finder.curr_pois
     pois_ids = set([poi[0].id for poi in pois])
+
+    shortest_points = []
+    for i in range(len(shortest_path)):
+        point = shortest_path[i]
+        shortest_points.append(
+            {
+                "map_point": MapPoint(x=point.x, y=point.y),
+                "is_poi": False,
+                "poi_details": None,
+                "dist_from_start": None,
+                "time_from_start": None,
+            }
+        )
 
     points = []
     for i in range(len(path)):
@@ -55,17 +69,18 @@ async def create_route(route_details: RouteDetails):
                     type=pois[0][2] if is_poi else None,
                     visit_time=pois[0][1] if is_poi else None,
                 ).model_dump(),
-                "dist_from_start": pois[0][3] / 1000 if is_poi else None,
-                "time_from_start": pois[0][4] / 60 if is_poi else None,
+                "dist_from_start": f"{pois[0][3] / 1000:.1f}" if is_poi else None,
+                "time_from_start": f"{pois[0][4] / 60:.1f}" if is_poi else None,
             }
         )
         if is_poi:
             pois.pop(0)
 
     return Path(
+        shortest_points=shortest_points,
         points=points,
-        path_time=finder.curr_time / 60,
-        path_distance=finder.curr_cost / 1000,
-        additional_distance=finder.curr_additional_distance / 1000,
-        additional_time=finder.curr_additional_time / 60,
+        path_time= f"{finder.curr_time / 60:.1f}",
+        path_distance=f"{finder.curr_cost / 1000:.1f}",
+        additional_distance=f"{finder.curr_additional_distance / 1000:.1f}",
+        additional_time=f"{finder.curr_additional_time / 60:.1f}",
     ).model_dump()

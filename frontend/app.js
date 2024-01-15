@@ -42,6 +42,7 @@ let map = L.map('map', {
 ).setView([(MAP_BOUNDS.NORTH + MAP_BOUNDS.SOUTH) / 2, (MAP_BOUNDS.WEST + MAP_BOUNDS.EAST) / 2], MINZOOM);
 let markers = [];
 let polyline;
+let polyline_shortest;
 let bounds = new L.LatLngBounds([[MAP_BOUNDS.SOUTH, MAP_BOUNDS.WEST], [MAP_BOUNDS.NORTH, MAP_BOUNDS.EAST]]);
 
 let amenities;
@@ -150,14 +151,14 @@ function addMarker(lat, lng, isFirst) {
 
 
 function updatePath() {
-    if (polyline) {
-        map.removeLayer(polyline);
+    if (polyline_shortest) {
+        map.removeLayer(polyline_shortest);
     }
 
     if (markers.length === 2) {
         let latlngs = [markers[0].getLatLng(), markers[1].getLatLng()];
-        polyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
-        map.fitBounds(polyline.getBounds());
+        polyline_shortest = L.polyline(latlngs, { color: 'blue' }).addTo(map);
+        map.fitBounds(polyline_shortest.getBounds());
     }
 };
 
@@ -227,7 +228,7 @@ function createPath() {
         .then(data => {
             console.log("Successfully created path: ");
             console.log(data);
-            drawPath(data.points);
+            drawPaths(data);
 
         })
         .catch(error => {
@@ -235,50 +236,30 @@ function createPath() {
         });
 };
 
-function drawPath(points) {
+function drawPaths(response_data) {
+    if (polyline_shortest) {
+        map.removeLayer(polyline_shortest);
+    }
     if (polyline) {
         map.removeLayer(polyline);
     }
 
-    let latlngs = points.map(point => [point.map_point.y, point.map_point.x]);
+    let latlngs_shortest = response_data.shortest_points.map(point => [point.map_point.y, point.map_point.x]);
+    let latlngs = response_data.points.map(point => [point.map_point.y, point.map_point.x]);
 
-    polyline = L.polyline(latlngs, { color: 'blue' }).addTo(map);
+    polyline_shortest = L.polyline(latlngs_shortest, { color: 'blue' }).addTo(map);
+    polyline = L.polyline(latlngs, { color: 'orange' }).addTo(map);
+    map.fitBounds(polyline_shortest.getBounds());
     map.fitBounds(polyline.getBounds());
 
-    points.forEach(point => {
+    response_data.points.forEach(point => {
         if (point.is_poi) {
             let marker = L.marker([point.map_point.y, point.map_point.x], {
                 draggable: false,
                 icon: orangeIcon
             })
-            marker.addTo(map).bindTooltip(point.poi_details.type + "(" + point.poi_details.visit_time + "m)", { permanent: true, offset: [0, 0] });
+            marker.addTo(map).bindTooltip(point.poi_details.type + "(" + point.dist_from_start + " km)", { permanent: true, offset: [0, 0] });
         };}
     );
+    markers[1].bindTooltip("End\n" + response_data.path_distance + " (+" + response_data.additional_distance+ ") km\n" + response_data.path_time + "(+" + response_data.additional_time +") min", { permanent: true, offset: [0, 0] });
 }
-
-// {
-//     "start": {
-//         "y": 52.24189997298265,
-//         "x": 20.931916236877445
-//     },
-//     "end": {
-//         "y": 52.219896288011746,
-//         "x": 21.011803150177002
-//     },
-//     "additional_time": "100000",
-//     "additional_distance": "1000000",
-//     "pois": [
-//         {
-//             "type": "School",
-//             "visit_time": "10"
-//         },
-//         {
-//             "type": "Restaurant",
-//             "visit_time": "20"
-//         },
-//         {
-//             "type": "Car wash",
-//             "visit_time": "30"
-//         }
-//     ]
-// }
