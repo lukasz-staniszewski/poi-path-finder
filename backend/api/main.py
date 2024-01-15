@@ -55,8 +55,8 @@ async def create_route(route_details: RouteDetails):
                     type=pois[0][2] if is_poi else None,
                     visit_time=pois[0][1] if is_poi else None,
                 ).model_dump(),
-                "dist_from_start": pois[0][3] / 1000,
-                "time_from_start": pois[0][4] / 60,
+                "dist_from_start": pois[0][3] / 1000 if is_poi else None,
+                "time_from_start": pois[0][4] / 60 if is_poi else None,
             }
         )
         if is_poi:

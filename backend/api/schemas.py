@@ -33,8 +33,8 @@ class PathPoint(BaseModel):
     map_point: MapPoint
     is_poi: bool = Field(description="Is point of interest", default=False)
     poi_details: POI | None = Field(description="Details of the POI", default=None)
-    dist_from_start: float = Field(description="Distance from start")
-    time_from_start: float = Field(description="Time from start")
+    dist_from_start: float | None = Field(description="Distance from start")
+    time_from_start: float | None = Field(description="Time from start")
 
 class Path(BaseModel):
     """Response path with points"""
