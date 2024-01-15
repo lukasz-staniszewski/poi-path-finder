@@ -199,11 +199,13 @@ class DB:
                     SELECT ST_Transform(way, 4326) AS geom
                     FROM planet_osm_point
                     WHERE osm_id = {start.id}
+                    LIMIT 1
                 ),
                 end_point AS (
                     SELECT ST_Transform(way, 4326) AS geom
                     FROM planet_osm_point
                     WHERE osm_id = {end.id}
+                    LIMIT 1
                 ),
                 distances1 AS (
                     SELECT r.osm_id, ST_Distance(ST_Transform(ST_StartPoint(r.way), 4326), sp.geom) AS distance
@@ -244,6 +246,7 @@ class DB:
                 SELECT ST_Transform(way, 4326) as geom
                 FROM planet_osm_point
                 WHERE osm_id = {end.id}
+                LIMIT 1
                 ),
                 nearby_lines AS (
                     SELECT r.osm_id, r.way
