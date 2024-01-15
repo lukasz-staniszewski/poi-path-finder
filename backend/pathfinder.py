@@ -41,6 +41,8 @@ class PathFinder:
 
         self.curr_path = [self.start]
         self.curr_cost = 0
+        self.curr_additional_distance = 0
+        self.curr_additional_time = 0
         self.curr_time = 0
         self.curr_pois = []
 
@@ -135,6 +137,8 @@ class PathFinder:
             self.last_valid_path_between_next = path_between_next
             self.max_distance = max(0, self.max_distance - curr_additional_distance)
             self.max_time = max(0, self.max_time - curr_additional_time)
+            self.curr_additional_distance = curr_additional_distance
+            self.curr_additional_time = curr_additional_time
             self.curr_pois.append((new_point, self.pois_order[len(self.curr_pois)].visit_time, self.pois_order[len(self.curr_pois)].type, self.curr_cost, self.curr_time))
             return True
 

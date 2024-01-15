@@ -42,7 +42,8 @@ class Path(BaseModel):
     points: List[PathPoint] = Field(description="List of points on the path")
     path_time: float = Field(description="Time of the path")
     path_distance: float = Field(description="Distance of the path")
-
+    additional_distance: float = Field(description="Additional distance")
+    additional_time: float = Field(description="Additional time")
 
 class AmenitiesList(BaseModel):
     """List of amenities"""

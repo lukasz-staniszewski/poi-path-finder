@@ -66,4 +66,6 @@ async def create_route(route_details: RouteDetails):
         points=points,
         path_time=finder.curr_time / 60,
         path_distance=finder.curr_cost / 1000,
+        additional_distance=finder.curr_additional_distance / 1000,
+        additional_time=finder.curr_additional_time / 60,
     ).model_dump()
