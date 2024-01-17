@@ -161,7 +161,7 @@ class DB:
             query = f"""
             SELECT *
             FROM pgr_dijkstra(
-                'SELECT osm_id as id, source, target, ST_Length(way) as cost 
+                'SELECT osm_id as id, source, target, ST_Length(way) as cost
                 FROM planet_osm_line as rr,
                     (SELECT ST_Expand(ST_Extent(l1.way),{expand}) as box  FROM planet_osm_line as l1 WHERE l1.source = {source} OR l1.target = {target}) as box
                 WHERE rr.way && box.box AND rr.highway IS NOT NULL',
@@ -307,7 +307,7 @@ class DB:
         gdf = None
         while (
             (curr_radius < MAX_BUFFER_RADIUS)
-            and (111320 * curr_radius < max_distance)
+            and (111320 * curr_radius < max_distance * 5)
             and (gdf is None or gdf.shape[0] == 0)
         ):
             query = f"""
@@ -333,8 +333,9 @@ class DB:
             )
             gdf = gdf.reset_index()[1:]  # first row is the point itself
             curr_radius *= 2
+            print(f"Valid points | Found {len(gdf)} points within radius = {curr_radius}")
         return (
             [DBPoint(row.osm_id, row.way.x, row.way.y) for idx, row in gdf.to_crs("EPSG:4326").iterrows()]
-            if len(gdf)
+            if gdf is not None and len(gdf) > 0
             else []
         )

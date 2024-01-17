@@ -129,8 +129,11 @@ class PathFinder:
         curr_additional_time = curr_additional_distance / VELOCITY
         print(f"curr_additional_distance: {curr_additional_distance}m")
         print(f"curr_additional_time: {curr_additional_time}s")
+        print(f"{self.max_distance}m")
+        print(f"{self.max_time}s")
 
         if curr_additional_distance > self.max_distance or curr_additional_time > self.max_time:
+            print("Restrictions violated")
             # Restrictions violated
             return False
         else:
@@ -144,7 +147,15 @@ class PathFinder:
             self.max_time = max(0, self.max_time - curr_additional_time)
             self.curr_additional_distance = curr_additional_distance
             self.curr_additional_time = curr_additional_time
-            self.curr_pois.append((new_point, self.pois_order[len(self.curr_pois)].visit_time, self.pois_order[len(self.curr_pois)].type, self.curr_cost, self.curr_time))
+            self.curr_pois.append(
+                (
+                    new_point,
+                    self.pois_order[len(self.curr_pois)].visit_time,
+                    self.pois_order[len(self.curr_pois)].type,
+                    self.curr_cost,
+                    self.curr_time,
+                )
+            )
             return True
 
     def calculate_heuristic(self, new_point: DBPoint):
@@ -190,4 +201,6 @@ class PathFinder:
         """
         if relative_point is None:
             relative_point = self.curr_path[-1]
-        return ((relative_point.x - proposed_point.x) ** 2 + (relative_point.y - proposed_point.y) ** 2) ** 0.5
+        return (
+            (relative_point.x - proposed_point.x) ** 2 + (relative_point.y - proposed_point.y) ** 2
+        ) ** 0.5
